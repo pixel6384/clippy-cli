@@ -9,6 +9,7 @@ defmodule Clippy.CLI do
       ["get", name] -> get_snippet(name)
       ["list"] -> list_snippets()
       ["rm", name] -> delete_snippet(name)
+      ["search", query] -> search_snippets(query)
       _ -> print_help()
     end
   end
@@ -55,6 +56,28 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp search_snippets(query) do
+    path = storage_dir()
+    if File.exists?(path) do
+      files = File.ls!(path)
+      matches = 
+        files
+        |> Enum.filter(fn name ->
+          content = File.read!(Path.join(path, name))
+          String.contains?(content, query)
+        end)
+
+      if Enum.empty?(matches) do
+        IO.puts("No snippets found containing '#{query}'.")
+      else
+        IO.puts("Found in snippets:")
+        Enum.each(matches, &IO.puts(" - #{&1}"))
+      end
+    else
+      IO.puts("No snippets saved yet.")
+    end
+  end
+
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
@@ -62,5 +85,6 @@ defmodule Clippy.CLI do
     IO.puts("  clippy get <name>           Retrieve a snippet")
     IO.puts("  clippy list                 List all snippets")
     IO.puts("  clippy rm <name>            Remove a snippet")
+    IO.puts("  clippy search <query>       Search snippets by content")
   end
 end
