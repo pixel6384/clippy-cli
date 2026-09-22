@@ -43,8 +43,8 @@ defmodule Clippy.CLI do
     if File.exists?(path) do
       content = File.read!(path)
       case get_clipboard_command() do
-        {cmd, arg} ->
-          System.cmd(cmd, [arg], input: content)
+        {cmd, args} ->
+          System.cmd(cmd, args, input: content)
           IO.puts("Snippet '#{name}' copied to clipboard.")
         nil ->
           IO.puts("No system clipboard tool found (pbcopy, xclip, or clip).")
@@ -56,11 +56,12 @@ defmodule Clippy.CLI do
 
   defp get_clipboard_command do
     # Basic OS detection for clipboard tools
-    os = System.get_env("OSTYPE") || ""
+    os = :os.type()
     cond do
-      String.contains?(os, "darwin") -> {"pbcopy", []}
-      String.contains?(os, "linux") -> {"xclip", ["-selection", "clipboard"]}
-      true -> {"clip", []} # Windows
+      os == :darwin -> {"pbcopy", []}
+      os == :linux -> {"xclip", ["-selection", "clipboard"]}
+      os == :nt -> {"clip", []}
+      true -> nil
     end
   end
 
