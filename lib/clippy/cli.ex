@@ -7,6 +7,7 @@ defmodule Clippy.CLI do
       [] -> print_help()
       ["add", name | rest] -> add_snippet(name, Enum.join(rest, " "))
       ["get", name] -> get_snippet(name)
+      ["copy", name] -> copy_snippet(name)
       ["list"] -> list_snippets()
       ["rm", name] -> delete_snippet(name)
       ["search", query] -> search_snippets(query)
@@ -33,6 +34,32 @@ defmodule Clippy.CLI do
       IO.puts(content)
     else
       IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
+  defp copy_snippet(name) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      content = File.read!(path)
+      case get_clipboard_command() do
+        {cmd, arg} ->
+          System.cmd(cmd, [arg], input: content)
+          IO.puts("Snippet '#{name}' copied to clipboard.")
+        nil ->
+          IO.puts("No system clipboard tool found (pbcopy, xclip, or clip).")
+      end
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
+  defp get_clipboard_command do
+    # Basic OS detection for clipboard tools
+    os = System.get_env("OSTYPE") || ""
+    cond do
+      String.contains?(os, "darwin") -> {"pbcopy", []}
+      String.contains?(os, "linux") -> {"xclip", ["-selection", "clipboard"]}
+      true -> {"clip", []} # Windows
     end
   end
 
@@ -83,6 +110,7 @@ defmodule Clippy.CLI do
     IO.puts("Usage:")
     IO.puts("  clippy add <name> <content>  Save a snippet")
     IO.puts("  clippy get <name>           Retrieve a snippet")
+    IO.puts("  clippy copy <name>          Copy snippet to clipboard")
     IO.puts("  clippy list                 List all snippets")
     IO.puts("  clippy rm <name>            Remove a snippet")
     IO.puts("  clippy search <query>       Search snippets by content")
