@@ -10,6 +10,7 @@ defmodule Clippy.CLI do
       ["copy", name] -> copy_snippet(name)
       ["list"] -> list_snippets()
       ["rm", name] -> delete_snippet(name)
+      ["rename", old_name, new_name] -> rename_snippet(old_name, new_name)
       ["search", query] -> search_snippets(query)
       _ -> print_help()
     end
@@ -83,6 +84,18 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp rename_snippet(old_name, new_name) do
+    old_path = Path.join(storage_dir(), old_name)
+    new_path = Path.join(storage_dir(), new_name)
+
+    if File.exists?(old_path) do
+      File.mv!(old_path, new_path)
+      IO.puts("Renamed snippet '#{old_name}' to '#{new_name}'.")
+    else
+      IO.puts("Snippet '#{old_name}' not found.")
+    end
+  end
+
   defp search_snippets(query) do
     path = storage_dir()
     if File.exists?(path) do
@@ -108,11 +121,12 @@ defmodule Clippy.CLI do
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
-    IO.puts("  clippy add <name> <content>  Save a snippet")
-    IO.puts("  clippy get <name>           Retrieve a snippet")
-    IO.puts("  clippy copy <name>          Copy snippet to clipboard")
-    IO.puts("  clippy list                 List all snippets")
-    IO.puts("  clippy rm <name>            Remove a snippet")
-    IO.puts("  clippy search <query>       Search snippets by content")
+    IO.puts("  clippy add <name> <content>    Save a snippet")
+    IO.puts("  clippy get <name>              Retrieve a snippet")
+    IO.puts("  clippy copy <name>             Copy snippet to clipboard")
+    IO.puts("  clippy list                    List all snippets")
+    IO.puts("  clippy rename <old> <new>      Rename a snippet")
+    IO.puts("  clippy rm <name>               Remove a snippet")
+    IO.puts("  clippy search <query>          Search snippets by content")
   end
 end
