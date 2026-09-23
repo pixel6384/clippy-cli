@@ -15,6 +15,8 @@ defmodule Clippy.CLI do
       ["clear"] -> clear_snippets()
       ["rename", old_name, new_name] -> rename_snippet(old_name, new_name)
       ["search", query] -> search_snippets(query)
+      ["import", dir] -> import_snippets(dir)
+      ["export", name, file] -> export_snippet(name, file)
       _ -> print_help()
     end
   end
@@ -161,6 +163,33 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp import_snippets(dir) do
+    if File.dir?(dir) do
+      storage_path = storage_dir()
+      File.mkdir_p!(storage_path)
+      
+      files = File.ls!(dir)
+      Enum.each(files, fn file ->
+        content = File.read!(Path.join(dir, file))
+        File.write!(Path.join(storage_path, file), content)
+      end)
+      IO.puts("Imported #{length(files)} snippets from #{dir}.")
+    else
+      IO.puts("Error: '#{dir}' is not a valid directory.")
+    end
+  end
+
+  defp export_snippet(name, destination) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      content = File.read!(path)
+      File.write!(destination, content)
+      IO.puts("Exported snippet '#{name}' to #{destination}.")
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
@@ -174,5 +203,7 @@ defmodule Clippy.CLI do
     IO.puts("  clippy rm <name>               Remove a snippet")
     IO.puts("  clippy clear                    Remove all snippets")
     IO.puts("  clippy search <query>          Search snippets by content")
+    IO.puts("  clippy import <dir>            Import snippets from directory")
+    IO.puts("  clippy export <name> <file>    Export snippet to file")
   end
 end
