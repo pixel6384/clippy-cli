@@ -149,13 +149,13 @@ defmodule Clippy.CLI do
         files
         |> Enum.filter(fn name ->
           content = File.read!(Path.join(path, name))
-          String.contains?(content, query)
+          String.contains?(name, query) or String.contains?(content, query)
         end)
 
       if Enum.empty?(matches) do
-        IO.puts("No snippets found containing '#{query}'.")
+        IO.puts("No snippets found matching '#{query}'.")
       else
-        IO.puts("Found in snippets:")
+        IO.puts("Found matches in:")
         Enum.each(matches, &IO.puts(" - #{&1}"))
       end
     else
@@ -168,7 +168,10 @@ defmodule Clippy.CLI do
       storage_path = storage_dir()
       File.mkdir_p!(storage_path)
       
-      files = File.ls!(dir)
+      files = 
+        File.ls!(dir)
+        |> Enum.filter(fn file -> not String.starts_with?(file, ".") end)
+
       Enum.each(files, fn file ->
         content = File.read!(Path.join(dir, file))
         File.write!(Path.join(storage_path, file), content)
@@ -202,7 +205,7 @@ defmodule Clippy.CLI do
     IO.puts("  clippy rename <old> <new>      Rename a snippet")
     IO.puts("  clippy rm <name>               Remove a snippet")
     IO.puts("  clippy clear                    Remove all snippets")
-    IO.puts("  clippy search <query>          Search snippets by content")
+    IO.puts("  clippy search <query>          Search snippets by name or content")
     IO.puts("  clippy import <dir>            Import snippets from directory")
     IO.puts("  clippy export <name> <file>    Export snippet to file")
   end
