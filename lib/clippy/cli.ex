@@ -10,6 +10,7 @@ defmodule Clippy.CLI do
       ["copy", name] -> copy_snippet(name)
       ["list"] -> list_snippets()
       ["rm", name] -> delete_snippet(name)
+      ["clear"] -> clear_snippets()
       ["rename", old_name, new_name] -> rename_snippet(old_name, new_name)
       ["search", query] -> search_snippets(query)
       _ -> print_help()
@@ -85,6 +86,19 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp clear_snippets do
+    path = storage_dir()
+    if File.exists?(path) do
+      files = File.ls!(path)
+      Enum.each(files, fn file ->
+        File.rm!(Path.join(path, file))
+      end)
+      IO.puts("All snippets cleared.")
+    else
+      IO.puts("No snippets to clear.")
+    end
+  end
+
   defp rename_snippet(old_name, new_name) do
     old_path = Path.join(storage_dir(), old_name)
     new_path = Path.join(storage_dir(), new_name)
@@ -128,6 +142,7 @@ defmodule Clippy.CLI do
     IO.puts("  clippy list                    List all snippets")
     IO.puts("  clippy rename <old> <new>      Rename a snippet")
     IO.puts("  clippy rm <name>               Remove a snippet")
+    IO.puts("  clippy clear                    Remove all snippets")
     IO.puts("  clippy search <query>          Search snippets by content")
   end
 end
