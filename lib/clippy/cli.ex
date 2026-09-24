@@ -19,6 +19,7 @@ defmodule Clippy.CLI do
       ["import", dir] -> import_snippets(dir)
       ["export", name, file] -> export_snippet(name, file)
       ["stats"] -> show_stats()
+      ["tag", name, tag] -> tag_snippet(name, tag)
       _ -> print_help()
     end
   end
@@ -26,6 +27,10 @@ defmodule Clippy.CLI do
   defp storage_dir do
     home = System.get_env("HOME") || System.get_env("USERPROFILE")
     Path.join(home, ".clippy", "snippets")
+  end
+
+  defp tags_file do
+    Path.join(storage_dir(), ".tags")
   end
 
   defp resolve_content(rest) do
@@ -120,6 +125,7 @@ defmodule Clippy.CLI do
     path = storage_dir()
     if File.exists?(path) do
       File.ls!(path)
+      |> Enum.reject(fn f -> f == ".tags" end)
       |> Enum.each(&IO.puts/1)
     else
       IO.puts("No snippets saved yet.")
@@ -130,6 +136,7 @@ defmodule Clippy.CLI do
     path = Path.join(storage_dir(), name)
     if File.exists?(path) do
       File.rm!(path)
+      remove_tags_for(name)
       IO.puts("Deleted snippet '#{name}'.")
     else
       IO.puts("Snippet '#{name}' not found.")
@@ -155,6 +162,7 @@ defmodule Clippy.CLI do
 
     if File.exists?(old_path) do
       File.mv!(old_path, new_path)
+      rename_tags(old_name, new_name)
       IO.puts("Renamed snippet '#{old_name}' to '#{new_name}'.")
     else
       IO.puts("Snippet '#{old_name}' not found.")
@@ -164,22 +172,32 @@ defmodule Clippy.CLI do
   defp search_snippets(query) do
     path = storage_dir()
     if File.exists?(path) do
-      files = File.ls!(path)
-      matches = 
-        files
-        |> Enum.filter(fn name ->
-          content = File.read!(Path.join(path, name))
-          String.contains?(name, query) or String.contains?(content, query)
-        end)
-
-      if Enum.empty?(matches) do
-        IO.puts("No snippets found matching '#{query}'.")
+      # Check if query is a tag (starts with #)
+      if String.starts_with?(query, "#") do
+        tag = String.slice(query, 1..-1)
+        matches = get_snippets_by_tag(tag)
+        print_matches(matches, query)
       else
-        IO.puts("Found matches in:")
-        Enum.each(matches, &IO.puts(" - #{&1}"))
+        files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" end)
+        matches = 
+          files
+          |> Enum.filter(fn name ->
+            content = File.read!(Path.join(path, name))
+            String.contains?(name, query) or String.contains?(content, query)
+          end)
+        print_matches(matches, query)
       end
     else
       IO.puts("No snippets saved yet.")
+    end
+  end
+
+  defp print_matches(matches, query) do
+    if Enum.empty?(matches) do
+      IO.puts("No snippets found matching '#{query}'.")
+    else
+      IO.puts("Found matches in:")
+      Enum.each(matches, &IO.puts(" - #{&1}"))
     end
   end
 
@@ -216,7 +234,7 @@ defmodule Clippy.CLI do
   defp show_stats do
     path = storage_dir()
     if File.exists?(path) do
-      files = File.ls!(path)
+      files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" end)
       count = length(files)
       total_size = 
         files
@@ -232,6 +250,75 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp tag_snippet(name, tag) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      add_tag(name, tag)
+      IO.puts("Added tag '#{tag}' to snippet '#{name}'.")
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
+  defp add_tag(name, tag) do
+    tags = load_tags()
+    current_tags = Map.get(tags, name, [])
+    updated_tags = if tag in current_tags, do: current_tags, else: [tag | current_tags]
+    save_tags(Map.put(tags, name, updated_tags))
+  end
+
+  defp get_snippets_by_tag(tag) do
+    tags = load_tags()
+    tags
+    |> Enum.filter(fn {_name, t_list} -> tag in t_list end)
+    |> Enum.map(fn {name, _t_list} -> name end)
+  end
+
+  defp remove_tags_for(name) do
+    tags = load_tags()
+    save_tags(Map.delete(tags, name))
+  end
+
+  defp rename_tags(old_name, new_name) do
+    tags = load_tags()
+    case Map.get(tags, old_name) do
+      nil -> :ok
+      t_list -> 
+        tags
+        |> Map.delete(old_name)
+        |> Map.put(new_name, t_list)
+        |> save_tags()
+    end
+  end
+
+  defp load_tags do
+    file = tags_file()
+    if File.exists?(file) do
+      case :erlang.term_to_binary(File.read!(file)) rescue _ -> {} end
+      # Using simple term storage for internal metadata
+      # In a real app, we'd use JSON, but for this CLI, Erlang term is concise
+      # Actually, let's use simple text parsing for safety if we don't have JSON
+      # but since it's internal, let's just use a simple map string representation
+      # For simplicity in this implementation, we use a basic format: "name:tag1,tag2\n"
+      File.read!(file)
+      |> String.split("\n", trim: true)
+      |> Enum.reduce(%{}, fn line, acc ->
+        [name, tags_str] = String.split(line, ":", parts: 2)
+        Map.put(acc, name, String.split(tags_str, ","))
+      end)
+    else
+      %{}
+    end
+  end
+
+  defp save_tags(tags) do
+    content = 
+      tags
+      |> Enum.map(fn {name, t_list} -> "#{name}:#{Enum.join(t_list, ",")}" end)
+      |> Enum.join("\n")
+    File.write!(tags_file(), content)
+  end
+
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
@@ -244,9 +331,10 @@ defmodule Clippy.CLI do
     IO.puts("  clippy rename <old> <new>      Rename a snippet")
     IO.puts("  clippy rm <name>               Remove a snippet")
     IO.puts("  clippy clear                    Remove all snippets")
-    IO.puts("  clippy search <query>          Search snippets by name or content")
+    IO.puts("  clippy search <query>          Search snippets by name or content (use #tag to search by tag)")
     IO.puts("  clippy import <dir>            Import snippets from directory")
     IO.puts("  clippy export <name> <file>    Export snippet to file")
     IO.puts("  clippy stats                    Show library statistics")
+    IO.puts("  clippy tag <name> <tag>         Add a tag to a snippet")
   end
 end
