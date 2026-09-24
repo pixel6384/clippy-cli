@@ -21,6 +21,7 @@ defmodule Clippy.CLI do
       ["stats"] -> show_stats()
       ["tag", name, tag] -> tag_snippet(name, tag)
       ["untag", name, tag] -> untag_snippet(name, tag)
+      ["tags"] -> list_all_tags()
       _ -> print_help()
     end
   end
@@ -271,6 +272,24 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp list_all_tags do
+    tags = load_tags()
+    if Map.empty?(tags) do
+      IO.puts("No tags found.")
+    else
+      # Invert the map: from {snippet => [tags]} to {tag => [snippets]}
+      inverted_tags = 
+        tags
+        |> Enum.flat_map(fn {name, t_list} -> Enum.map(t_list, fn t -> {t, name} end) end)
+        |> Enum.group_by(fn {t, _name} -> t end, fn {_t, name} -> name end)
+
+      IO.puts("Existing Tags:")
+      Enum.each(inverted_tags, fn {tag, snippets} ->
+        IO.puts("  #{tag}: #{Enum.join(snippets, ", ")}")
+      end)
+    end
+  end
+
   defp add_tag(name, tag) do
     tags = load_tags()
     current_tags = Map.get(tags, name, [])
@@ -358,5 +377,6 @@ defmodule Clippy.CLI do
     IO.puts("  clippy stats                    Show library statistics")
     IO.puts("  clippy tag <name> <tag>         Add a tag to a snippet")
     IO.puts("  clippy untag <name> <tag>       Remove a tag from a snippet")
+    IO.puts("  clippy tags                     List all tags and their snippets")
   end
 end
