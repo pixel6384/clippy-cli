@@ -20,6 +20,7 @@ defmodule Clippy.CLI do
       ["export", name, file] -> export_snippet(name, file)
       ["stats"] -> show_stats()
       ["tag", name, tag] -> tag_snippet(name, tag)
+      ["untag", name, tag] -> untag_snippet(name, tag)
       _ -> print_help()
     end
   end
@@ -260,11 +261,31 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp untag_snippet(name, tag) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      remove_tag(name, tag)
+      IO.puts("Removed tag '#{tag}' from snippet '#{name}'.")
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
   defp add_tag(name, tag) do
     tags = load_tags()
     current_tags = Map.get(tags, name, [])
     updated_tags = if tag in current_tags, do: current_tags, else: [tag | current_tags]
     save_tags(Map.put(tags, name, updated_tags))
+  end
+
+  defp remove_tag(name, tag) do
+    tags = load_tags()
+    case Map.get(tags, name) do
+      nil -> :ok
+      t_list ->
+        updated_tags = Enum.reject(t_list, fn t -> t == tag end)
+        save_tags(Map.put(tags, name, updated_tags))
+    end
   end
 
   defp get_snippets_by_tag(tag) do
@@ -336,5 +357,6 @@ defmodule Clippy.CLI do
     IO.puts("  clippy export <name> <file>    Export snippet to file")
     IO.puts("  clippy stats                    Show library statistics")
     IO.puts("  clippy tag <name> <tag>         Add a tag to a snippet")
+    IO.puts("  clippy untag <name> <tag>       Remove a tag from a snippet")
   end
 end
