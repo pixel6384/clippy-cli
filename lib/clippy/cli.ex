@@ -18,6 +18,7 @@ defmodule Clippy.CLI do
       ["search", query] -> search_snippets(query)
       ["import", dir] -> import_snippets(dir)
       ["export", name, file] -> export_snippet(name, file)
+      ["stats"] -> show_stats()
       _ -> print_help()
     end
   end
@@ -212,6 +213,25 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp show_stats do
+    path = storage_dir()
+    if File.exists?(path) do
+      files = File.ls!(path)
+      count = length(files)
+      total_size = 
+        files
+        |> Enum.reduce(0, fn file, acc ->
+          File.read!(Path.join(path, file)) |> String.length() |> Kernel.+(acc)
+        end)
+
+      IO.puts("Clippy Library Stats:")
+      IO.puts("  Total Snippets: #{count}")
+      IO.puts("  Total Characters: #{total_size}")
+    else
+      IO.puts("No snippets saved yet.")
+    end
+  end
+
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
@@ -227,5 +247,6 @@ defmodule Clippy.CLI do
     IO.puts("  clippy search <query>          Search snippets by name or content")
     IO.puts("  clippy import <dir>            Import snippets from directory")
     IO.puts("  clippy export <name> <file>    Export snippet to file")
+    IO.puts("  clippy stats                    Show library statistics")
   end
 end
