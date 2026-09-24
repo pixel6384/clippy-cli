@@ -5,10 +5,11 @@ defmodule Clippy.CLI do
     args = System.argv()
     case args do
       [] -> print_help()
-      ["add", name | rest] -> add_snippet(name, Enum.join(rest, " "))
-      ["set", name | rest] -> set_snippet(name, Enum.join(rest, " "))
+      ["add", name | rest] -> add_snippet(name, rest)
+      ["set", name | rest] -> set_snippet(name, rest)
       ["append", name | rest] -> append_snippet(name, Enum.join(rest, " "))
       ["get", name] -> get_snippet(name)
+      ["cat", name] -> get_snippet(name)
       ["copy", name] -> copy_snippet(name)
       ["list"] -> list_snippets()
       ["rm", name] -> delete_snippet(name)
@@ -26,26 +27,44 @@ defmodule Clippy.CLI do
     Path.join(home, ".clippy", "snippets")
   end
 
-  defp add_snippet(name, content) do
-    storage_path = storage_dir()
-    File.mkdir_p!(storage_path)
-    path = Path.join(storage_path, name)
-
-    if File.exists?(path) do
-      IO.puts("Snippet '#{name}' already exists. Use 'set' to update it or 'rm' to delete it first.")
-    else
-      File.write!(path, content)
-      IO.puts("Saved snippet '#{name}'.")
+  defp resolve_content(rest) do
+    case rest do
+      [] -> nil
+      [path] when File.exists?(path) -> File.read!(path)
+      rest -> Enum.join(rest, " ")
     end
   end
 
-  defp set_snippet(name, content) do
-    path = Path.join(storage_dir(), name)
-    if File.exists?(path) do
-      File.write!(path, content)
-      IO.puts("Updated snippet '#{name}'.")
+  defp add_snippet(name, rest) do
+    content = resolve_content(rest)
+    if is_nil(content) do
+      IO.puts("Error: No content provided for snippet '#{name}'. Provide text or a path to a file.")
     else
-      IO.puts("Snippet '#{name}' not found. Use 'add' to create it first.")
+      storage_path = storage_dir()
+      File.mkdir_p!(storage_path)
+      path = Path.join(storage_path, name)
+
+      if File.exists?(path) do
+        IO.puts("Snippet '#{name}' already exists. Use 'set' to update it or 'rm' to delete it first.")
+      else
+        File.write!(path, content)
+        IO.puts("Saved snippet '#{name}'.")
+      end
+    end
+  end
+
+  defp set_snippet(name, rest) do
+    content = resolve_content(rest)
+    if is_nil(content) do
+      IO.puts("Error: No content provided for snippet '#{name}'. Provide text or a path to a file.")
+    else
+      path = Path.join(storage_dir(), name)
+      if File.exists?(path) do
+        File.write!(path, content)
+        IO.puts("Updated snippet '#{name}'.")
+      else
+        IO.puts("Snippet '#{name}' not found. Use 'add' to create it first.")
+      end
     end
   end
 
@@ -196,10 +215,10 @@ defmodule Clippy.CLI do
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
-    IO.puts("  clippy add <name> <content>    Save a snippet")
-    IO.puts("  clippy set <name> <content>    Update a snippet")
+    IO.puts("  clippy add <name> <content|file> Save a snippet (supports file path as content)")
+    IO.puts("  clippy set <name> <content|file> Update a snippet (supports file path as content)")
     IO.puts("  clippy append <name> <content>  Append to a snippet")
-    IO.puts("  clippy get <name>              Retrieve a snippet")
+    IO.puts("  clippy get/cat <name>           Retrieve a snippet")
     IO.puts("  clippy copy <name>             Copy snippet to clipboard")
     IO.puts("  clippy list                    List all snippets")
     IO.puts("  clippy rename <old> <new>      Rename a snippet")
