@@ -10,6 +10,8 @@ defmodule Clippy.CLI do
       ["append", name | rest] -> append_snippet(name, Enum.join(rest, " "))
       ["get", name] -> get_snippet(name)
       ["cat", name] -> get_snippet(name)
+      ["preview", name] -> preview_snippet(name)
+      ["count", name] -> count_snippet_lines(name)
       ["copy", name] -> copy_snippet(name)
       ["list"] -> list_snippets()
       ["rm", name] -> delete_snippet(name)
@@ -95,6 +97,33 @@ defmodule Clippy.CLI do
     if File.exists?(path) do
       content = File.read!(path)
       IO.puts(content)
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
+  defp preview_snippet(name) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      content = File.read!(path)
+      lines = String.split(content, "\n")
+      preview = lines |> Enum.take(10) |> Enum.join("\n")
+      IO.puts("--- Preview of '#{name}' (first 10 lines) ---")
+      IO.puts(preview)
+      if length(lines) > 10 do
+        IO.puts("... (and #{length(lines) - 10} more lines)")
+      end
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
+  defp count_snippet_lines(name) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      content = File.read!(path)
+      count = length(String.split(content, "\n", trim: true))
+      IO.puts("Snippet '#{name}' has #{count} lines.")
     else
       IO.puts("Snippet '#{name}' not found.")
     end
@@ -406,6 +435,8 @@ defmodule Clippy.CLI do
     IO.puts("  clippy set <name> <content|file> Update a snippet (supports file path as content)")
     IO.puts("  clippy append <name> <content>  Append to a snippet")
     IO.puts("  clippy get/cat <name>           Retrieve a snippet")
+    IO.puts("  clippy preview <name>           Show the first 10 lines of a snippet")
+    IO.puts("  clippy count <name>            Count lines in a snippet")
     IO.puts("  clippy copy <name>             Copy snippet to clipboard")
     IO.puts("  clippy list                    List all snippets")
     IO.puts("  clippy rename <old> <new>      Rename a snippet")
