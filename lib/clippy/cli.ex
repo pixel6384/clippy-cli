@@ -14,6 +14,7 @@ defmodule Clippy.CLI do
       ["count", name] -> count_snippet_lines(name)
       ["copy", name] -> copy_snippet(name)
       ["list"] -> list_snippets()
+      ["recent"] -> list_recent_snippets()
       ["rm", name] -> delete_snippet(name)
       ["clear"] -> clear_snippets()
       ["rename", old_name, new_name] -> rename_snippet(old_name, new_name)
@@ -39,6 +40,10 @@ defmodule Clippy.CLI do
 
   defp tags_file do
     Path.join(storage_dir(), ".tags")
+  end
+
+  defp history_file do
+    Path.join(storage_dir(), ".history")
   end
 
   defp resolve_content(rest) do
@@ -95,6 +100,7 @@ defmodule Clippy.CLI do
   defp get_snippet(name) do
     path = Path.join(storage_dir(), name)
     if File.exists?(path) do
+      track_usage(name)
       content = File.read!(path)
       IO.puts(content)
     else
@@ -105,6 +111,7 @@ defmodule Clippy.CLI do
   defp preview_snippet(name) do
     path = Path.join(storage_dir(), name)
     if File.exists?(path) do
+      track_usage(name)
       content = File.read!(path)
       lines = String.split(content, "\n")
       preview = lines |> Enum.take(10) |> Enum.join("\n")
@@ -121,6 +128,7 @@ defmodule Clippy.CLI do
   defp count_snippet_lines(name) do
     path = Path.join(storage_dir(), name)
     if File.exists?(path) do
+      track_usage(name)
       content = File.read!(path)
       count = length(String.split(content, "\n", trim: true))
       IO.puts("Snippet '#{name}' has #{count} lines.")
@@ -132,6 +140,7 @@ defmodule Clippy.CLI do
   defp copy_snippet(name) do
     path = Path.join(storage_dir(), name)
     if File.exists?(path) do
+      track_usage(name)
       content = File.read!(path)
       case get_clipboard_command() do
         {cmd, args} ->
@@ -160,10 +169,27 @@ defmodule Clippy.CLI do
     path = storage_dir()
     if File.exists?(path) do
       File.ls!(path)
-      |> Enum.reject(fn f -> f == ".tags" end)
+      |> Enum.reject(fn f -> f == ".tags" or f == ".history" end)
       |> Enum.each(&IO.puts/1)
     else
       IO.puts("No snippets saved yet.")
+    end
+  end
+
+  defp list_recent_snippets do
+    file = history_file()
+    if File.exists?(file) do
+      lines = File.read!(file) |> String.split("\n", trim: true)
+      if Enum.empty?(lines) do
+        IO.puts("No recent activity.")
+      else
+        IO.puts("Recently accessed snippets:")
+        lines |> Enum.take(10) |> Enum.with_index(1) |> Enum.each(fn {name, idx} ->
+          IO.puts("  #{idx}. #{name}")
+        end)
+      end
+    else
+      IO.puts("No recent activity.")
     end
   end
 
@@ -172,6 +198,7 @@ defmodule Clippy.CLI do
     if File.exists?(path) do
       File.rm!(path)
       remove_tags_for(name)
+      remove_history_for(name)
       IO.puts("Deleted snippet '#{name}'.")
     else
       IO.puts("Snippet '#{name}' not found.")
@@ -198,6 +225,7 @@ defmodule Clippy.CLI do
     if File.exists?(old_path) do
       File.mv!(old_path, new_path)
       rename_tags(old_name, new_name)
+      rename_history(old_name, new_name)
       IO.puts("Renamed snippet '#{old_name}' to '#{new_name}'.")
     else
       IO.puts("Snippet '#{old_name}' not found.")
@@ -214,7 +242,7 @@ defmodule Clippy.CLI do
         print_matches(matches, query)
       else
         query_down = String.downcase(query)
-        files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" end)
+        files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" or f == ".history" end)
         matches = 
           files
           |> Enum.filter(fn name ->
@@ -271,7 +299,7 @@ defmodule Clippy.CLI do
   defp show_stats do
     path = storage_dir()
     if File.exists?(path) do
-      files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" end)
+      files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" or f == ".history" end)
       count = length(files)
       total_size = 
         files
@@ -439,6 +467,7 @@ defmodule Clippy.CLI do
     IO.puts("  clippy count <name>            Count lines in a snippet")
     IO.puts("  clippy copy <name>             Copy snippet to clipboard")
     IO.puts("  clippy list                    List all snippets")
+    IO.puts("  clippy recent                   List recently accessed snippets")
     IO.puts("  clippy rename <old> <new>      Rename a snippet")
     IO.puts("  clippy rm <name>               Remove a snippet")
     IO.puts("  clippy clear                    Remove all snippets")
@@ -451,5 +480,34 @@ defmodule Clippy.CLI do
     IO.puts("  clippy tags                     List all tags and their snippets")
     IO.puts("  clippy diff <name> <content|file> Compare snippet with content")
     IO.puts("  clippy version [-v]             Show current version")
+  end
+
+  # Usage tracking helpers
+
+  defp track_usage(name) do
+    file = history_file()
+    history = if File.exists?(file), do: String.split(File.read!(file), "\n", trim: true), else: []
+    # Move accessed snippet to the front and limit to 50 entries
+    updated_history = ([name] ++ Enum.reject(history, fn n -> n == name end))
+    |> Enum.take(50)
+    File.write!(file, Enum.join(updated_history, "\n"))
+  end
+
+  defp remove_history_for(name) do
+    file = history_file()
+    if File.exists?(file) do
+      history = String.split(File.read!(file), "\n", trim: true)
+      updated_history = Enum.reject(history, fn n -> n == name end)
+      File.write!(file, Enum.join(updated_history, "\n"))
+    end
+  end
+
+  defp rename_history(old_name, new_name) do
+    file = history_file()
+    if File.exists?(file) do
+      history = String.split(File.read!(file), "\n", trim: true)
+      updated_history = Enum.map(history, fn n -> if n == old_name, do: new_name, else: n end)
+      File.write!(file, Enum.join(updated_history, "\n"))
+    end
   end
 end
