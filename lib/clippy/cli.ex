@@ -22,6 +22,7 @@ defmodule Clippy.CLI do
       ["tag", name, tag] -> tag_snippet(name, tag)
       ["untag", name, tag] -> untag_snippet(name, tag)
       ["tags"] -> list_all_tags()
+      ["diff", name | rest] -> diff_snippet(name, rest)
       _ -> print_help()
     end
   end
@@ -360,6 +361,37 @@ defmodule Clippy.CLI do
     File.write!(tags_file(), content)
   end
 
+  defp diff_snippet(name, rest) do
+    path = Path.join(storage_dir(), name)
+    if File.exists?(path) do
+      content = resolve_content(rest)
+      if is_nil(content) do
+        IO.puts("Error: No content or file path provided to diff against.")
+      else
+        snippet_content = File.read!(path)
+        if snippet_content == content do
+          IO.puts("Snippet '#{name}' is identical to the provided content.")
+        else
+          # We use the system 'diff' tool for a professional output if available
+          # Creating temporary files for the diff command
+          tmp_snippet = File.write!(Path.join(storage_dir(), ".tmp_diff_orig"), snippet_content)
+          tmp_new = File.write!(Path.join(storage_dir(), ".tmp_diff_new"), content)
+          
+          IO.puts("Differences for snippet '#{name}':")
+          case System.cmd("diff", ["-u", tmp_snippet, tmp_new]) do
+            {output, 0} -> IO.puts("No differences.")
+            {output, _} -> IO.puts(output)
+          end
+          
+          File.rm!(tmp_snippet)
+          File.rm!(tmp_new)
+        end
+      end
+    else
+      IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
@@ -379,5 +411,6 @@ defmodule Clippy.CLI do
     IO.puts("  clippy tag <name> <tag>         Add a tag to a snippet")
     IO.puts("  clippy untag <name> <tag>       Remove a tag from a snippet")
     IO.puts("  clippy tags                     List all tags and their snippets")
+    IO.puts("  clippy diff <name> <content|file> Compare snippet with content")
   end
 end
