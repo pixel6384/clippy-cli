@@ -23,6 +23,9 @@ defmodule Clippy.CLI do
       ["untag", name, tag] -> untag_snippet(name, tag)
       ["tags"] -> list_all_tags()
       ["diff", name | rest] -> diff_snippet(name, rest)
+      ["version", "-v"] -> show_version()
+      ["version"] -> show_version()
+      ["-v"] -> show_version()
       _ -> print_help()
     end
   end
@@ -392,6 +395,10 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp show_version do
+    IO.puts("Clippy CLI v0.1.0")
+  end
+
   defp print_help do
     IO.puts("Clippy - Clipboard Snippet Manager\n\n")
     IO.puts("Usage:")
@@ -412,5 +419,6 @@ defmodule Clippy.CLI do
     IO.puts("  clippy untag <name> <tag>       Remove a tag from a snippet")
     IO.puts("  clippy tags                     List all tags and their snippets")
     IO.puts("  clippy diff <name> <content|file> Compare snippet with content")
+    IO.puts("  clippy version [-v]             Show current version")
   end
 end
