@@ -176,16 +176,18 @@ defmodule Clippy.CLI do
     if File.exists?(path) do
       # Check if query is a tag (starts with #)
       if String.starts_with?(query, "#") do
-        tag = String.slice(query, 1..-1)
+        tag = String.slice(query, 1..-1) |> String.downcase()
         matches = get_snippets_by_tag(tag)
         print_matches(matches, query)
       else
+        query_down = String.downcase(query)
         files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" end)
         matches = 
           files
           |> Enum.filter(fn name ->
             content = File.read!(Path.join(path, name))
-            String.contains?(name, query) or String.contains?(content, query)
+            String.contains?(String.downcase(name), query_down) or 
+            String.contains?(String.downcase(content), query_down)
           end)
         print_matches(matches, query)
       end
@@ -310,7 +312,9 @@ defmodule Clippy.CLI do
   defp get_snippets_by_tag(tag) do
     tags = load_tags()
     tags
-    |> Enum.filter(fn {_name, t_list} -> tag in t_list end)
+    |> Enum.filter(fn {_name, t_list} -> 
+      Enum.any?(t_list, fn t -> String.downcase(t) == tag end)
+    end)
     |> Enum.map(fn {name, _t_list} -> name end)
   end
 
@@ -334,17 +338,14 @@ defmodule Clippy.CLI do
   defp load_tags do
     file = tags_file()
     if File.exists?(file) do
-      case :erlang.term_to_binary(File.read!(file)) rescue _ -> {} end
-      # Using simple term storage for internal metadata
-      # In a real app, we'd use JSON, but for this CLI, Erlang term is concise
-      # Actually, let's use simple text parsing for safety if we don't have JSON
-      # but since it's internal, let's just use a simple map string representation
-      # For simplicity in this implementation, we use a basic format: "name:tag1,tag2\n"
+      # Using simple text parsing for safety if we don't have JSON
       File.read!(file)
       |> String.split("\n", trim: true)
       |> Enum.reduce(%{}, fn line, acc ->
-        [name, tags_str] = String.split(line, ":", parts: 2)
-        Map.put(acc, name, String.split(tags_str, ","))
+        case String.split(line, ":", parts: 2) do
+          [name, tags_str] -> Map.put(acc, name, String.split(tags_str, ","))
+          _ -> acc
+        end
       end)
     else
       %{}
