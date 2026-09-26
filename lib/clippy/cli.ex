@@ -19,6 +19,7 @@ defmodule Clippy.CLI do
       ["clear"] -> clear_snippets()
       ["rename", old_name, new_name] -> rename_snippet(old_name, new_name)
       ["search", query] -> search_snippets(query)
+      ["grep", pattern] -> grep_snippets(pattern)
       ["import", dir] -> import_snippets(dir)
       ["export", name, file] -> export_snippet(name, file)
       ["stats"] -> show_stats()
@@ -258,6 +259,25 @@ defmodule Clippy.CLI do
     end
   end
 
+  defp grep_snippets(pattern) do
+    path = storage_dir()
+    if File.exists?(path) do
+      files = File.ls!(path) |> Enum.reject(fn f -> f == ".tags" or f == ".history" end)
+      matches = 
+        files
+        |> Enum.filter(fn name ->
+          content = File.read!(Path.join(path, name))
+          case Regex.compile(pattern) do
+            {:ok, regex} -> Regex.run(regex, content) != nil
+            {:error, _} -> false
+          end
+        end)
+      print_matches(matches, pattern)
+    else
+      IO.puts("No snippets saved yet.")
+    end
+  end
+
   defp print_matches(matches, query) do
     if Enum.empty?(matches) do
       IO.puts("No snippets found matching '#{query}'.")
@@ -492,6 +512,7 @@ defmodule Clippy.CLI do
     IO.puts("  clippy rm <name>               Remove a snippet")
     IO.puts("  clippy clear                    Remove all snippets")
     IO.puts("  clippy search <query>          Search snippets by name or content (use #tag to search by tag)")
+    IO.puts("  clippy grep <pattern>           Search snippet contents using regex")
     IO.puts("  clippy import <dir>            Import snippets from directory")
     IO.puts("  clippy export <name> <file>    Export snippet to file")
     IO.puts("  clippy stats                    Show library statistics")
