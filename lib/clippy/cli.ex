@@ -26,6 +26,7 @@ defmodule Clippy.CLI do
       ["untag", name, tag] -> untag_snippet(name, tag)
       ["tags"] -> list_all_tags()
       ["diff", name | rest] -> diff_snippet(name, rest)
+      ["batch", "tag", tag | names] -> batch_tag(tag, names)
       ["version", "-v"] -> show_version()
       ["version"] -> show_version()
       ["-v"] -> show_version()
@@ -434,21 +435,40 @@ defmodule Clippy.CLI do
         else
           # We use the system 'diff' tool for a professional output if available
           # Creating temporary files for the diff command
-          tmp_snippet = File.write!(Path.join(storage_dir(), ".tmp_diff_orig"), snippet_content)
-          tmp_new = File.write!(Path.join(storage_dir(), ".tmp_diff_new"), content)
+          tmp_snippet_path = Path.join(storage_dir(), ".tmp_diff_orig")
+          tmp_new_path = Path.join(storage_dir(), ".tmp_diff_new")
+          
+          File.write!(tmp_snippet_path, snippet_content)
+          File.write!(tmp_new_path, content)
           
           IO.puts("Differences for snippet '#{name}':")
-          case System.cmd("diff", ["-u", tmp_snippet, tmp_new]) do
+          case System.cmd("diff", ["-u", tmp_snippet_path, tmp_new_path]) do
             {output, 0} -> IO.puts("No differences.")
             {output, _} -> IO.puts(output)
           end
           
-          File.rm!(tmp_snippet)
-          File.rm!(tmp_new)
+          File.rm!(tmp_snippet_path)
+          File.rm!(tmp_new_path)
         end
       end
     else
       IO.puts("Snippet '#{name}' not found.")
+    end
+  end
+
+  defp batch_tag(tag, names) do
+    if Enum.empty?(names) do
+      IO.puts("Error: No snippet names provided for batch tagging.")
+    else
+      Enum.each(names, fn name ->
+        path = Path.join(storage_dir(), name)
+        if File.exists?(path) do
+          add_tag(name, tag)
+          IO.puts("Tagged '#{name}' with '#{tag}'.")
+        else
+          IO.puts("Skipping '#{name}': not found.")
+        end
+      end)
     end
   end
 
@@ -479,6 +499,7 @@ defmodule Clippy.CLI do
     IO.puts("  clippy untag <name> <tag>       Remove a tag from a snippet")
     IO.puts("  clippy tags                     List all tags and their snippets")
     IO.puts("  clippy diff <name> <content|file> Compare snippet with content")
+    IO.puts("  clippy batch tag <tag> <names...> Tag multiple snippets at once")
     IO.puts("  clippy version [-v]             Show current version")
   end
 
